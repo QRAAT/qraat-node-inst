@@ -3,6 +3,13 @@
 # Chris Patton for QRAAT
 # ~7 Aug 2013
 
+
+# Mount point for QRAAT installation.
+TARGET_DIR=/tmp/primary
+
+# Location of file system tarball and file patches. 
+STAGING_DIR=$(pwd) 
+
 function help(){
   cat <<!EOF!
 
@@ -54,8 +61,17 @@ function setup_disk() {
     echo -n "causing you to lose your data. Continue? [y/n] " && read ans
     case $ans in 
       y|yes|YES|Y)
-        # TODO script mkfs to set up partitions. set PRIMARY_PART and SWAP_PART
-        echo TODO partition
+        # script fdisk to set up partitions. set PRIMARY_PART and SWAP_PART
+        if [ -e $TARGET_DISK ]
+        then
+          echo TODO partition
+          echo "m
+          p" | fdisk $TARGET_DISK #TODO
+          PRIMARY_PART=${TARGET_DISK}1
+          SWAP_PART=${TARGET_DISK}2
+        else
+          echo "error (install-node): can't partition '$TARGET_DISK'; target doesn't exist." 1>&2 && exit 1  
+        fi
       ;;
 
       *)
@@ -71,27 +87,80 @@ function setup_disk() {
   elif [ -e $PRIMARY_PART ] && [ -e $SWAP_PART ]
   then
     echo TODO format partitions
-    # TODO format partitions.
-    # user confirm, check fs type is ok. 
-    # mkfs.$FS_TYPE $PRIMARY_PART -L "qraat-main"
-    # mkswap $SWAP_PART -L "qraat-swap"
+    case $FS_TYPE in
+      ext2|ext3|ext4)
+        echo TODO format partitions
+        echo -n "install-node: $PRIMARY_PART will be formatted. Continue? [y/n] " && read ans
+        case $ans in 
+          yes|YES|y|Y)
+            #mkfs.$FS_TYPE $PRIMARY_PART -L "qraat-main" &> #TODO 
+            echo TODO format primary
+          ;;
+
+          *)
+            echo "install-node: cancelled." && exit 0
+        esac
+      ;;
+
+      *)
+        echo "error (install-node): Unrecognized file system type '$FS_TYPE'." 1>&2 && exit 1
+    esac
+
+    echo -n "install-node: $SWAP_PART will be formatted as a swap partition. Continue? [y/n] " && read ans
+    case $ans in 
+      yes|YES|y|Y)
+        #mkswap $SWAP_PART -L "qraat-swap" #TODO
+        echo TODO format swap
+      ;;
+
+      *)
+        echo "install-node: cancelled." && exit 0
+      esac
+
   else
-    echo "error (install-node): the primary and/or swap partition doesn't exist." 1>&2 && exit 1
+    echo "error (install-node): the primary and/or swap partition doesn't exist." 1>&2 
+    [[ $TARGET_DISK ]] && echo "error (install-node): Autopartition failed. Try running fdisk manually." 1>&2
+    exit 1
   fi
 }
 
 function copy_fs() {
-  echo TODO copy fs 
-  # TODO copy files system to primary parition. 
-  # mount primary partition in /tmp, untar qraat-fs.tgz 
-  # install grub, unmount. 
+  # Copy files system to primary parition and update grub. 
+  echo TODO copy fs
+  #mkdir -p $TARGET_DIR 
+  #mount $PRIMARY_PART $TARGET_DIR
+  #tar -xvpzf $STAGING_DIR/qraat-fs.tgz -C $TARGET_DIR --numeric-owner #TODO
+
+  echo TODO configure grub
+  #cd /
+  #for f in dev dev/pts proc ; do 
+  #  mount --bind /$f $TARGET_DIR/$f ; done
+  #chroot /mnt/primary /bin/bash -c "dpkg-reconfigure grub-pc" #TODO
+
+  #umount /mnt/primary
 }
 
 function fs_fixups() {
+  # Patch files, set hostname, update network interface
   echo TODO fs fixups
-  # TODO patch files, set hostname, update network interface
-  # cp /etc/fstab, rm /etc/udev/rules.d/*-persistent*.rules (sp?) 
-  # sed /etc/hostname, /etc/hosts, /etc/network/interface
+  #mkdir -p $TARGET_DIR 
+  #mount $PRIMARY_PART $TARGET_DIR
+  
+  # Copy generic etc/fstab (just primary and swap partitions) and 
+  # the interface file. 
+  #cp -R $STAGING_DIR/fixups/* $TARGET_DIR  #TODO 
+  
+  # Remove persistent udev rules.
+  # rm -f $TARGET_DIR/etc/udev/rules.d/*-persistent*.rules (sp?) #TODO
+
+  # Set hostname for target system. 
+  #for file in '/etc/hosts' '/etc/hostnmae'; do
+  #  sed -i "s/qraat-N/qraat-$SITE_NO" $file; done #TODO
+
+  # Configure netowrk interfaces. 
+  #sed -i "s/10.N/10.$SITE_NO/g" $TARGET_DIR/etc/network/interface #TODO
+  
+  #umount /mnt/primary
 }
 
 
@@ -142,11 +211,12 @@ do
 done
 
 # Check that the site number was specified. 
-[[ $SITE_NO ]] ||  (echo "error (install-node): please specify the site number." 1>&2 && exit 1)
+if [[ ! $SITE_NO ]]
+  then echo "error (install-node): please specify the site number." 1>&2 && exit 1; fi
 
 # Do install. 
-#setup_disk
-PRIMARY_PART="/dev/sda1"
-SWAP_PART="/dev/sda2"
+setup_disk
+#PRIMARY_PART="fella"
+#SWAP_PART="guy"
 copy_fs
 fs_fixups

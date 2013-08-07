@@ -135,9 +135,9 @@ function copy_fs() {
   #cd /
   #for f in dev dev/pts proc ; do 
   #  mount --bind /$f $TARGET_DIR/$f ; done
-  #chroot /mnt/primary /bin/bash -c "dpkg-reconfigure grub-pc" #TODO
+  #chroot $TARGET_DIR /bin/bash -c "dpkg-reconfigure grub-pc" #TODO
 
-  #umount /mnt/primary
+  #umount $TARGET_DIR
 }
 
 function fs_fixups() {
@@ -146,21 +146,24 @@ function fs_fixups() {
   #mkdir -p $TARGET_DIR 
   #mount $PRIMARY_PART $TARGET_DIR
   
-  # Copy generic etc/fstab (just primary and swap partitions) and 
-  # the interface file. 
+  # Copy generic etc/fstab (just primary and swap partitions),
+  # the network interface file, and other stuf. 
   #cp -R $STAGING_DIR/fixups/* $TARGET_DIR  #TODO 
   
   # Remove persistent udev rules.
-  # rm -f $TARGET_DIR/etc/udev/rules.d/*-persistent*.rules (sp?) #TODO
+  #rm -f $TARGET_DIR/etc/udev/rules.d/*-persistent*.rules (sp?) #TODO
 
   # Set hostname for target system. 
-  #for file in '/etc/hosts' '/etc/hostnmae'; do
-  #  sed -i "s/qraat-N/qraat-$SITE_NO" $file; done #TODO
+  #for file in '$TARGET_DIR/etc/hosts' '$TARGET_DIR/etc/hostnmae' ; do
+  #  sed -i "s/qraat-N/qraat-$SITE_NO" $file ; done #TODO
 
   # Configure netowrk interfaces. 
   #sed -i "s/10.N/10.$SITE_NO/g" $TARGET_DIR/etc/network/interface #TODO
-  
-  #umount /mnt/primary
+
+  # Set file system of primary partition in /etc/fstab. 
+  #sed -i "s/fs-type/$FS_TYPE" $TARGET_DIR/etc/fstab #TODO
+
+  #umount $TARGET_DIR
 }
 
 

@@ -1,0 +1,152 @@
+#!/bin/bash
+# install-node 
+# Chris Patton for QRAAT
+# ~7 Aug 2013
+
+function help(){
+  cat <<!EOF!
+
+usage: install.sh [-h,--fs-type] --site-no
+                  --target-disk                *OR*
+                  --primary-part --swap-part
+
+  This script installs the QRAAT-node software distribution 
+  to the destination disk. This includes the Ubuntu Server 
+  12.04 i386 operating system, GNU Radio, our software, and
+  some customizations for running this node in a QRAAT
+  deployment. WARNING: As this script writes a new partition
+  table and master boot record, be sure to back up any
+  important data.
+
+    --site-no=N               Site number for the target machine. 
+
+    --fs-type=TYPE            Filesystem type to use for main installation
+                              partition. (Default is 'ext2'.) 
+
+     -h                       Print this help.
+
+  There are two ways to install QRAAT. Specifying the target 
+  disk will automatically partition the disk: 
+
+    --target-disk=/dev/sdK    Destination disk for QRAAT installation. 
+                              This will override the partition table and 
+                              master boot record, e.g. '/dev/sda'. 
+
+  Alternatively, specifying the primary partition and the swap 
+  space will prevent the partition table from being overwritten. 
+  Note that the partitions will be formatted:
+
+    --primary-part=/dev/sdKI  K is the disk and I is the partition, e.g 
+                              '/dev/sda1'. Must be atleast 1 GB. 
+    
+    --swap-part=/dev/sdKJ     Swap partition must be at least 128 MB. 
+
+!EOF!
+}
+
+
+function setup_disk() {
+  # Set up disk 
+  if [ $TARGET_DISK ]
+  then 
+    echo    "install-node: You have opted automatically configure the disk."
+    echo    "WARNING: this will overwrite the partition table on $TARGET_DISK,"
+    echo -n "causing you to lose your data. Continue? [y/n] " && read ans
+    case $ans in 
+      y|yes|YES|Y)
+        # TODO script mkfs to set up partitions. set PRIMARY_PART and SWAP_PART
+        echo TODO partition
+      ;;
+
+      *)
+        echo "install-node: canceled." && exit 0
+    esac
+  fi
+
+  # Format partitions. 
+  if [ ! $PRIMARY_PART ] 
+    then echo "error (install-node): please specify the primary installation partition." 1>&2 && exit 1
+  elif [ ! $SWAP_PART ] 
+    then echo "error (install-node): please specify the swap partition." 1>&2 && exit 1
+  elif [ -e $PRIMARY_PART ] && [ -e $SWAP_PART ]
+  then
+    echo TODO format partitions
+    # TODO format partitions.
+    # user confirm, check fs type is ok. 
+    # mkfs.$FS_TYPE $PRIMARY_PART -L "qraat-main"
+    # mkswap $SWAP_PART -L "qraat-swap"
+  else
+    echo "error (install-node): the primary and/or swap partition doesn't exist." 1>&2 && exit 1
+  fi
+}
+
+function copy_fs() {
+  echo TODO copy fs 
+  # TODO copy files system to primary parition. 
+  # mount primary partition in /tmp, untar qraat-fs.tgz 
+  # install grub, unmount. 
+}
+
+function fs_fixups() {
+  echo TODO fs fixups
+  # TODO patch files, set hostname, update network interface
+  # cp /etc/fstab, rm /etc/udev/rules.d/*-persistent*.rules (sp?) 
+  # sed /etc/hostname, /etc/hosts, /etc/network/interface
+}
+
+
+
+# Parse command line options.
+FS_TYPE="ext2"
+for opt in $@
+do
+
+  if [[ "$opt" == "-h" ]] 
+  then
+    help && exit 0
+
+  elif [[ "$opt" =~ ^--([^=]*)=(.*)$ ]]
+  then
+    case ${BASH_REMATCH[1]} in
+
+      site-no) 
+        SITE_NO=${BASH_REMATCH[2]}
+      ;;
+
+      fs-type)
+        FS_TYPE=${BASH_REMATCH[2]}
+      ;;
+
+      target-disk)
+        TARGET_DISK=${BASH_REMATCH[2]}
+      ;;
+
+      primary-part)
+        PRIMARY_PART=${BASH_REMATCH[2]}
+      ;;
+
+      swap-part) 
+        SWAP_PART=${BASH_REMATCH[2]}
+      ;;
+
+      *)
+        echo "error (install-node): '${BASH_REMATCH[1]} is not an option." 1>&2 && exit 1
+
+    esac 
+
+  else
+    echo "error (install-node): argument '$opt' not recognized." 1>&2 && exit 1
+
+  fi
+
+done
+
+# Check that the site number was specified. 
+[[ $SITE_NO ]] ||  (echo "error (install-node): please specify the site number." 1>&2 && exit 1)
+
+# Do install. 
+#setup_disk
+PRIMARY_PART="/dev/sda1"
+SWAP_PART="/dev/sda2"
+copy_fs
+fs_fixups

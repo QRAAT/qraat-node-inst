@@ -51,100 +51,130 @@ usage: install.sh [-h,--fs-type] --site-no
 !EOF!
 }
 
+function mount_primary() {
+  echo -e "\033[1minstall-node: mounting the primary installation partition.\033[0m"
+  mkdir -p $TARGET_DIR 
+  mount $PRIMARY_PART $TARGET_DIR
+}
+
+function umount_primary() {
+  echo -e "\033[1minstall-node: unmounting the primary partition.\033[0m"
+  umount $TARGET_DIR
+}
+
 
 function setup_disk() {
   # Set up disk 
   if [ $TARGET_DISK ]
   then 
-    echo    "install-node: You have opted automatically configure the disk."
-    echo    "WARNING: this will overwrite the partition table on $TARGET_DISK,"
-    echo -n "causing you to lose your data. Continue? [y/n] " && read ans
+    echo -e  "\033[1minstall-node: You have opted automatically configure the disk.\033[0m"
+    echo -e  "\033[1mWARNING: this will overwrite the partition table on $TARGET_DISK,\033[0m"
+    echo -en "\033[1mcausing you to lose your data. Continue? [y/n] \033[0m" && read ans
     case $ans in 
       y|yes|YES|Y)
         # script fdisk to set up partitions. set PRIMARY_PART and SWAP_PART
         if [ -e $TARGET_DISK ]
         then
-          echo TODO partition
-          echo "m
-          p" | fdisk $TARGET_DISK #TODO
+          echo "o
+          n
+          p
+          2
+          
+          +512M
+          n
+          p
+          1
+          
+          
+      	  p
+          w" | fdisk $TARGET_DISK
           PRIMARY_PART=${TARGET_DISK}1
           SWAP_PART=${TARGET_DISK}2
         else
-          echo "error (install-node): can't partition '$TARGET_DISK'; target doesn't exist." 1>&2 && exit 1  
+          echo -e "\033[1merror (install-node): can't partition '$TARGET_DISK'; target doesn't exist.\033[0m" 1>&2 && exit 1  
         fi
       ;;
 
       *)
-        echo "install-node: canceled." && exit 0
+        echo -e "\033[1minstall-node: canceled.\033[0m" && exit 0
     esac
   fi
 
   # Format partitions. 
   if [ ! $PRIMARY_PART ] 
-    then echo "error (install-node): please specify the primary installation partition." 1>&2 && exit 1
+    then echo -e "\033[1merror (install-node): please specify the primary installation partition.\033[0m" 1>&2 && exit 1
   elif [ ! $SWAP_PART ] 
-    then echo "error (install-node): please specify the swap partition." 1>&2 && exit 1
+    then echo -e "\033[1merror (install-node): please specify the swap partition.\033[0m" 1>&2 && exit 1
   elif [ -e $PRIMARY_PART ] && [ -e $SWAP_PART ]
   then
-    echo TODO format partitions
     case $FS_TYPE in
       ext2|ext3|ext4)
-        echo TODO format partitions
-        echo -n "install-node: $PRIMARY_PART will be formatted. Continue? [y/n] " && read ans
+        echo -ne "\033[1minstall-node: $PRIMARY_PART will be formatted as $FS_TYPE. Continue? [y/n] \033[0m" && read ans
         case $ans in 
           yes|YES|y|Y)
-            #mkfs.$FS_TYPE $PRIMARY_PART -L "qraat-main" &> #TODO 
-            echo TODO format primary
+            mkfs.$FS_TYPE -L "qraat-main" $PRIMARY_PART
           ;;
 
           *)
-            echo "install-node: cancelled." && exit 0
+            echo -e "\033[1minstall-node: cancelled.\033[0m" && exit 0
         esac
       ;;
 
       *)
-        echo "error (install-node): Unrecognized file system type '$FS_TYPE'." 1>&2 && exit 1
+        echo -e "\033[1merror (install-node): Unrecognized file system type '$FS_TYPE'.\033[0m" 1>&2 && exit 1
     esac
 
-    echo -n "install-node: $SWAP_PART will be formatted as a swap partition. Continue? [y/n] " && read ans
+    echo -en "\033[1minstall-node: $SWAP_PART will be formatted as a swap partition. Continue? [y/n] \033[0m" && read ans
     case $ans in 
       yes|YES|y|Y)
-        #mkswap $SWAP_PART -L "qraat-swap" #TODO
-        echo TODO format swap
+        mkswap -L "qraat-swap" $SWAP_PART
       ;;
 
       *)
-        echo "install-node: cancelled." && exit 0
+        echo -e "\033[1minstall-node: cancelled.\033[0m" && exit 0
       esac
 
   else
-    echo "error (install-node): the primary and/or swap partition doesn't exist." 1>&2 
-    [[ $TARGET_DISK ]] && echo "error (install-node): Autopartition failed. Try running fdisk manually." 1>&2
+    echo -e "\033[1merror (install-node): the primary and/or swap partition doesn't exist.\033[0m" 1>&2 
+    [[ $TARGET_DISK ]] && echo -e "\033[1merror (install-node): Autopartition failed. Try running fdisk manually.\033[0m" 1>&2
     exit 1
   fi
 }
 
 function copy_fs() {
-  # Copy files system to primary parition and update grub. 
-  echo TODO copy fs
-  #mkdir -p $TARGET_DIR 
-  #mount $PRIMARY_PART $TARGET_DIR
-  #tar -xvpzf $STAGING_DIR/qraat-fs.tgz -C $TARGET_DIR --numeric-owner #TODO
+  # Copy files system to primary partition and update grub. 
+ 
+  echo -ne "\033[1minstall-node: calculating the size of the filesystem ... " 
+  size=`awk -v m=$(zcat $STAGING_DIR/test.tgz | wc -c) 'BEGIN { print m / 1000000 }'`
+  echo -ne "$size MB will be installed. Continue? [y,n] \033[0m" && read ans
+  
+  case $ans in 
 
-  echo TODO configure grub
+    yes|YES|y|Y) 
+      mount_primary
+      echo -e "\033[1minstall-node: copying filesystem. This will take some time.\033[0m"
+      sleep 1
+      tar -xvpzf $STAGING_DIR/test.tgz -C $TARGET_DIR --numeric-owner
+    ;;
+
+    *)
+      echo -e "\033[1minstall-node: cancelled.\033[0m" && exit 0
+
+  esac
+
+  echo -e "\033[1minstall-node: file transfer complete. Starting grub set up ... \033[0m"
+  sleep 1
   #cd /
   #for f in dev dev/pts proc ; do 
   #  mount --bind /$f $TARGET_DIR/$f ; done
   #chroot $TARGET_DIR /bin/bash -c "dpkg-reconfigure grub-pc" #TODO
 
-  #umount $TARGET_DIR
+  umount_primary
 }
 
 function fs_fixups() {
   # Patch files, set hostname, update network interface
-  echo TODO fs fixups
-  #mkdir -p $TARGET_DIR 
-  #mount $PRIMARY_PART $TARGET_DIR
+  mount_primary
   
   # Copy generic etc/fstab (just primary and swap partitions),
   # the network interface file, and other stuf. 
@@ -162,8 +192,8 @@ function fs_fixups() {
 
   # Set file system of primary partition in /etc/fstab. 
   #sed -i "s/fs-type/$FS_TYPE" $TARGET_DIR/etc/fstab #TODO
-
-  #umount $TARGET_DIR
+  sleep 1
+  umount_primary
 }
 
 
@@ -218,8 +248,8 @@ if [[ ! $SITE_NO ]]
   then echo "error (install-node): please specify the site number." 1>&2 && exit 1; fi
 
 # Do install. 
-setup_disk
-#PRIMARY_PART="fella"
-#SWAP_PART="guy"
-copy_fs
+#setup_disk
+PRIMARY_PART="/dev/sdb1"
+SWAP_PART="/dev/sdb2"
+#copy_fs #TODO test grub install
 fs_fixups

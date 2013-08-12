@@ -66,15 +66,6 @@ function umount_primary() {
   umount $TARGET_DIR
 }
 
-function fix_grub() {
-  cd /
-  for f in dev dev/pts proc ; do 
-    mount --bind /$f $TARGET_DIR/$f ; done
-  chroot $TARGET_DIR /bin/bash -c "dpkg-reconfigure grub-pc"
-  for f in proc dev/pts dev ; do 
-    umount $TARGET_DIR/$f ; done
-}
-
 
 function setup_disk() {
   # Set up disk 
@@ -175,10 +166,6 @@ function copy_fs() {
 
   esac
 
-  echo -e "\033[1minstall-node: file transfer complete. Starting grub set up ... \033[0m"
-  sleep 1
-  fix_grub
-
   umount_primary
 }
 
@@ -211,6 +198,29 @@ function fs_fixups() {
   umount_primary
 }
 
+function fix_grub() {
+  # Reinstall grub on target disk
+  
+  if [ $TARGET_DISK ]
+    then PRIMARY_PART=${TARGET_DISK}1 ; fi
+  if [ ! $PRIMARY_PART ]
+    then echo -e "\033[1merror (fix-grub): please specify the primary partition.\033[0m" 1>&2 
+         exit 1 ; fi
+
+  mount_primary 
+  
+  echo -e "\033[1minstall-node: starting grub set up ... \033[0m"
+  sleep 1
+
+  cd /
+  for f in dev dev/pts proc ; do 
+    mount --bind /$f $TARGET_DIR/$f ; done
+  chroot $TARGET_DIR /bin/bash -c "dpkg-reconfigure grub-pc"
+  for f in proc dev/pts dev ; do 
+    umount $TARGET_DIR/$f ; done
+
+  umount_primary
+}
 
 
 # Parse command line options.
@@ -266,14 +276,7 @@ done
 
 if [ $FIX_GRUB ] 
 then
-  if [ $TARGET_DISK ]
-    then PRIMARY_PART=${TARGET_DISK}1 ; fi
-  if [ ! $PRIMARY_PART ]
-    then echo -e "\033[1merror (fix-grub): please specify the primary partition.\033[0m" 1>&2 
-         exit 1 ; fi
-  mount_primary
   fix_grub
-  umount_primary
 
 else # Do install.  
   
@@ -286,5 +289,6 @@ else # Do install.
   #SWAP_PART="/dev/sda2"
   copy_fs
   fs_fixups
+  fix_grub
 
 fi 

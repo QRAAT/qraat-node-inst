@@ -1,0 +1,69 @@
+From Chris's image (someone needs to add stuff in Chris's document from a fresh install)
+Change grub to timeout when hard boot:
+        sudo vi /etc/default/grub
+        GRUB_RECORDFAIL_TIMEOUT=2
+
+        sudo update-grub
+
+Setup ramdisk:
+        sudo vi /etc/fstab
+        tmpfs /tmp/ramdisk tmpfs nodev,nosuid,mode=1777,size=1024M 0 0
+
+If using a USB-Serial adaptor, change permission:
+	sudo vi /etc/udev/rules.d/101-serial-usb.rules
+	KERNEL=="ttyUSB0", MODE="0666"
+
+If using serial port, add user to "dialout" group:
+        TODO	
+
+
+To add the DNS nameserver:
+{I don't like this version TAB
+        sudo vi /etc/resolvconf/resolv.conf.d/base
+        nameserver 8.8.8.8
+
+        sudo service resolvconf restart
+
+        cat /etc/resolv.conf
+        nameserver 8.8.8.8
+}
+	sudo vi /etc/networking/interfaces
+        dns-nameservers 8.8.8.8 8.8.4.4
+
+To install ntp:
+        sudo apt-get install ntp
+
+        sudo vi /etc/ntp.conf
+        server 10.253.1.55 iburst
+        comment out all other servers and access options, leave just the log file options
+
+        sudo /etc/init.d/ntp restart
+
+        set time to within 1000 seconds for ntp to take over
+
+Install rmg codebase
+        git clone git://github.com/QRAAT/QRAAT.git (skip if already exists)
+
+        git remote add github git://github.com/QRAAT/QRAAT.git (read-only)
+
+        git remote add rmg-server qraat@10.253.1.55:/rmg_server/QRAAT_deployment_code/ (need qraat password on rmg-server)
+
+        /home/rmg/build-rmg install
+
+Add files for rmg-node:(These should be created in "build-rmg install" or in the scripts that need them, TAB)
+        /home/rmg/status.log
+        /home/rmg/site.csv
+
+Add log directory:(This should be checked for in rmg_runretry or created at install, TAB)
+	mkdir /home/rmg/log
+
+Setup Cron:
+        crontab -e
+        append the following:
+        */5 * * * * /usr/local/bin/rmg-node check
+	59 * * * * /usr/local/bin/rmg-node restart
+	@reboot /usr/local/bin/rmg-node check
+
+Before letting system run remember to update tx list on remote
+
+

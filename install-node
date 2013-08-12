@@ -30,7 +30,11 @@ usage: install.sh [-h,--fs-type] --site-no
     --fs-type=TYPE            Filesystem type to use for main installation
                               partition. (Default is 'ext2'.) 
 
+    --fix-grub                Skip install and fix the GRUB bootloader on 
+                              the target disk (primary partition).    
+
      -h                       Print this help.
+
 
   There are two ways to install QRAAT. Specifying the target 
   disk will automatically partition the disk: 
@@ -46,7 +50,7 @@ usage: install.sh [-h,--fs-type] --site-no
     --primary-part=/dev/sdKI  K is the disk and I is the partition, e.g 
                               '/dev/sda1'. Must be atleast 1 GB. 
     
-    --swap-part=/dev/sdKJ     Swap partition must be at least 128 MB. 
+    --swap-part=/dev/sdKJ     Swap partition must be at least 128 MB.
 
 !EOF!
 }
@@ -60,6 +64,15 @@ function mount_primary() {
 function umount_primary() {
   echo -e "\033[1minstall-node: unmounting the primary partition.\033[0m"
   umount $TARGET_DIR
+}
+
+function fix_grub() {
+  cd /
+  for f in dev dev/pts proc ; do 
+    mount --bind /$f $TARGET_DIR/$f ; done
+  chroot $TARGET_DIR /bin/bash -c "dpkg-reconfigure grub-pc"
+  for f in proc dev/pts dev ; do 
+    umount $TARGET_DIR/$f ; done
 }
 
 
@@ -145,7 +158,7 @@ function copy_fs() {
   # Copy files system to primary partition and update grub. 
  
   echo -ne "\033[1minstall-node: calculating the size of the filesystem ... " 
-  size=`awk -v m=$(zcat $STAGING_DIR/test.tgz | wc -c) 'BEGIN { print m / 1000000 }'`
+  #size=`awk -v m=$(zcat $STAGING_DIR/qraat-fs.tgz | wc -c) 'BEGIN { print m / 1000000 }'`
   echo -ne "$size MB will be installed. Continue? [y,n] \033[0m" && read ans
   
   case $ans in 
@@ -154,7 +167,7 @@ function copy_fs() {
       mount_primary
       echo -e "\033[1minstall-node: copying filesystem. This will take some time.\033[0m"
       sleep 1
-      tar -xvpzf $STAGING_DIR/test.tgz -C $TARGET_DIR --numeric-owner
+      tar -xvpzf $STAGING_DIR/qraat-fs.tgz -C $TARGET_DIR --numeric-owner
     ;;
 
     *)
@@ -164,10 +177,7 @@ function copy_fs() {
 
   echo -e "\033[1minstall-node: file transfer complete. Starting grub set up ... \033[0m"
   sleep 1
-  #cd /
-  #for f in dev dev/pts proc ; do 
-  #  mount --bind /$f $TARGET_DIR/$f ; done
-  #chroot $TARGET_DIR /bin/bash -c "dpkg-reconfigure grub-pc" #TODO
+  fix_grub
 
   umount_primary
 }
@@ -177,21 +187,26 @@ function fs_fixups() {
   mount_primary
   
   # Copy generic etc/fstab (just primary and swap partitions),
-  # the network interface file, and other stuf. 
-  #cp -R $STAGING_DIR/fixups/* $TARGET_DIR  #TODO 
+  # the network interface file, and other stuff. 
+  echo -e "\033[1minstall-node: copying configuration files to target\033[0m"
+  cp -R $STAGING_DIR/fixups/* $TARGET_DIR
   
   # Remove persistent udev rules.
-  #rm -f $TARGET_DIR/etc/udev/rules.d/*-persistent*.rules (sp?) #TODO
+  echo -e "\033[1minstall-node: removing persistent udev rules\033[0m"
+  rm -f $TARGET_DIR/etc/udev/rules.d/*-persistent*.rules 
 
   # Set hostname for target system. 
-  #for file in '$TARGET_DIR/etc/hosts' '$TARGET_DIR/etc/hostnmae' ; do
-  #  sed -i "s/qraat-N/qraat-$SITE_NO" $file ; done #TODO
+  echo -e "\033[1minstall-node: setting target hostname\033[0m"
+  for file in "$TARGET_DIR/etc/hosts" "$TARGET_DIR/etc/hostname" ; do
+    sed -i "s/qraat-N/qraat-$SITE_NO/" $file ; done 
 
   # Configure netowrk interfaces. 
-  #sed -i "s/10.N/10.$SITE_NO/g" $TARGET_DIR/etc/network/interface #TODO
+  echo -e "\033[1minstall-node: configuring network interface for eth0 (10.$SITE_NO.1.1)\033[0m"
+  sed -i "s/10.N/10.$SITE_NO/g" $TARGET_DIR/etc/network/interfaces
 
   # Set file system of primary partition in /etc/fstab. 
-  #sed -i "s/fs-type/$FS_TYPE" $TARGET_DIR/etc/fstab #TODO
+  echo -e "\033[1minstall-node: configuring /etc/fstab\033[0m"
+  sed -i "s/fs-type/$FS_TYPE/" $TARGET_DIR/etc/fstab 
   sleep 1
   umount_primary
 }
@@ -206,6 +221,10 @@ do
   if [[ "$opt" == "-h" ]] 
   then
     help && exit 0
+
+  elif [[ "$opt" == "--fix-grub" ]]
+  then
+    FIX_GRUB=true
 
   elif [[ "$opt" =~ ^--([^=]*)=(.*)$ ]]
   then
@@ -232,24 +251,40 @@ do
       ;;
 
       *)
-        echo "error (install-node): '${BASH_REMATCH[1]} is not an option." 1>&2 && exit 1
+        echo -e "\033[1merror (install-node): '${BASH_REMATCH[1]} is not an option.\033[0m" 1>&2 && exit 1
 
     esac 
 
   else
-    echo "error (install-node): argument '$opt' not recognized." 1>&2 && exit 1
+    echo -e "\033[1merror (install-node): argument '$opt' not recognized.\033[0m" 1>&2 && exit 1
 
   fi
 
 done
 
-# Check that the site number was specified. 
-if [[ ! $SITE_NO ]]
-  then echo "error (install-node): please specify the site number." 1>&2 && exit 1; fi
 
-# Do install. 
-#setup_disk
-PRIMARY_PART="/dev/sdb1"
-SWAP_PART="/dev/sdb2"
-#copy_fs #TODO test grub install
-fs_fixups
+
+if [ $FIX_GRUB ] 
+then
+  if [ $TARGET_DISK ]
+    then PRIMARY_PART=${TARGET_DISK}1 ; fi
+  if [ ! $PRIMARY_PART ]
+    then echo -e "\033[1merror (fix-grub): please specify the primary partition.\033[0m" 1>&2 
+         exit 1 ; fi
+  mount_primary
+  fix_grub
+  umount_primary
+
+else # Do install.  
+  
+  # Check that the site number was specified. 
+  if [[ ! $SITE_NO ]]
+    then echo -e "\033[1merror (install-node): please specify the site number.\033[0m" 1>&2 && exit 1; fi
+
+  setup_disk
+  #PRIMARY_PART="/dev/sda1"
+  #SWAP_PART="/dev/sda2"
+  copy_fs
+  fs_fixups
+
+fi 

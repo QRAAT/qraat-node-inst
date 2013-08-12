@@ -10,3 +10,4 @@ proc            /proc           proc    nodev,noexec,nosuid 0       0
 LABEL=qraat-main /               fs-type    errors=remount-ro 0       1
 # swap was on /dev/sda5 during installation
 LABEL=qraa-swap  none            swap    sw              0       0
+tmpfs  /tmp/ramdisk       tmpfs   nodev,nosuid,mode=1777,size=1024M 0 0 
